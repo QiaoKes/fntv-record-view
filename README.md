@@ -23,42 +23,6 @@
 - **响应式设计**：支持桌面和移动端访问
 - **只读安全**：仅读取数据库，不进行任何写入操作
 
-## 🚀 安装和运行
-
-### 环境要求
-
-- Python 3.7+
-- Flask (已包含在requirements.txt中)
-- SQLite3 (Python内置库)
-
-### 运行步骤
-
-1. 克隆项目到本地：
-
-```bash
-git clone https://github.com/QiaoKes/fntv-record-view
-cd fntv-record-view
-```
-
-2. 安装依赖：
-
-```bash
-pip install -r requirements.txt
-```
-
-3. 确保数据库文件存在：
-
-- `database/trimmedia.db`
-
-4. 运行应用：
-
-```bash
-python main.py
-```
-
-5. 访问应用：
-   打开浏览器访问 `http://localhost:5000`
-
 ### 🐳 Docker Compose 部署（推荐）
 
 使用 Docker Compose 可以更简单地部署和管理应用。
@@ -94,41 +58,11 @@ docker-compose logs -f fntv-record-view
 5. 访问应用：
    打开浏览器访问 `http://localhost:5000`
 
-#### 常用管理命令
-
-```bash
-# 停止服务
-docker-compose stop
-
-# 重启服务
-docker-compose restart
-
-# 查看日志
-docker-compose logs -f
-
-# 更新镜像并重新部署
-docker-compose pull
-docker-compose up -d
-
-# 完全清理（包括容器和网络）
-docker-compose down
-```
-
-#### Docker 部署特性
-
-- **🔒 安全隔离**：容器化运行，与宿主机隔离
-- **📊 资源限制**：自动限制内存使用（50M-100M）和CPU占用
-- **🔄 自动重启**：容器异常退出时自动重启
-- **💊 健康检查**：每30秒检查应用健康状态
-- **📝 日志管理**：支持日志文件持久化
-- **🔒 只读挂载**：数据库目录以只读方式挂载，确保数据安全
-
 #### 注意事项
 
 - 确保数据库目录路径正确且Docker有读取权限
 - 默认端口为5000，可在docker-compose.yml中修改
-- 日志文件会在当前目录下的app.log中持久化
-- 容器运行时使用非root用户，提高安全性
+- 确认挂载的飞牛影音数据库路径正确
 
 ## 📊 界面展示
 
@@ -221,16 +155,6 @@ docker-compose down
 - **只读模式**：应用程序仅读取数据库，不会进行任何修改
 - **数据安全**：确保数据库文件路径正确且可读
 - **性能考虑**：大量数据时建议适当调整每页显示数量
-
-## 🔮 功能扩展
-
-可考虑的功能扩展：
-
-- 📈 观看统计图表
-- 🔍 搜索功能
-- 📊 用户观看偏好分析
-- 📱 更多筛选选项
-- 🎯 收藏和推荐功能
 
 ## 📄 许可证
 
