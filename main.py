@@ -438,7 +438,8 @@ if __name__ == '__main__':
     logger.info("启动飞牛影视观看历史管理系统")
     logger.info("=" * 50)
     logger.info("访问地址: http://127.0.0.1:5000")
+    logger.info("Flask 运行模式: 串行处理 (单线程)")
     logger.info("所有组件已启动，服务运行中...")
     logger.info("=" * 50)
     
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, threaded=False)
