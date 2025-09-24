@@ -28,7 +28,8 @@
 ### 环境要求
 
 - Python 3.7+
-- Flask
+- Flask (已包含在requirements.txt中)
+- SQLite3 (Python内置库)
 
 ### 运行步骤
 
