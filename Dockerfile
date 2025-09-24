@@ -16,10 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制应用代码
 COPY . .
 
-# 复制并设置启动脚本权限
-COPY docker-entrypoint.sh /app/
-RUN chmod +x /app/docker-entrypoint.sh
-
 # 创建数据库目录用于挂载
 RUN mkdir -p /app/database
 
@@ -27,4 +23,4 @@ RUN mkdir -p /app/database
 EXPOSE 5000
 
 # 启动命令
-CMD ["/app/docker-entrypoint.sh"]
+CMD ["python", "main.py"]
