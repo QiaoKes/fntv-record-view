@@ -10,6 +10,7 @@ services:
     environment:
       - FLASK_ENV=production
       - PYTHONPATH=/app
+      - TZ=Asia/Shanghai # 设置时区
     restart: unless-stopped
     network_mode: bridge
     deploy:
