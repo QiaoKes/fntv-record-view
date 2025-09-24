@@ -427,11 +427,13 @@ def get_stats():
             WHERE status = 1 AND guid != 'default-user-template'
         ''').fetchone()['count']
         
-        # 总播放记录数
+        # 总播放记录数（只统计能正确JOIN到item和user表的记录）
         total_plays = conn.execute('''
             SELECT COUNT(*) as count 
-            FROM item_user_play 
-            WHERE visible = 1
+            FROM item_user_play iup
+            JOIN user u ON iup.user_guid = u.guid
+            JOIN item i ON iup.item_guid = i.guid
+            WHERE iup.visible = 1
         ''').fetchone()['count']
         
         # 活跃用户数（有播放记录的用户）
@@ -448,12 +450,14 @@ def get_stats():
             WHERE visible = 1
         ''').fetchone()['latest']
         
-        # 今日播放数
+        # 今日播放数（只统计能正确JOIN到item和user表的记录）
         today_start = int(datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
         today_plays = conn.execute('''
             SELECT COUNT(*) as count 
-            FROM item_user_play 
-            WHERE visible = 1 AND update_time >= ?
+            FROM item_user_play iup
+            JOIN user u ON iup.user_guid = u.guid
+            JOIN item i ON iup.item_guid = i.guid
+            WHERE iup.visible = 1 AND iup.update_time >= ?
         ''', (today_start,)).fetchone()['count']
         
         return jsonify({
