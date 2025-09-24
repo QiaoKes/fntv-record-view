@@ -115,18 +115,17 @@ def get_db_connection() -> Iterator[sqlite3.Connection]:
 # 后台备份逻辑 (Background Backup Logic)
 # ===============================================================
 
-# perform_backup 函数保持不变
 def perform_backup():
     logger.info(f"开始备份: {SOURCE_DB_PATH} -> {LOCAL_DB_PATH}")
     source_conn = None
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             source_conn = sqlite3.connect(f"file:{SOURCE_DB_PATH}?mode=ro", uri=True)
             break
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < 2:
                 logger.warning(f"源数据库被锁定，10秒后重试...")
-                time.sleep(10)
+                time.sleep(1)
             else:
                 logger.error(f"连接源数据库时发生错误: {e}")
                 return False
@@ -158,8 +157,10 @@ def background_backup_task(pool: ResettableConnectionPool, interval: int):
         time.sleep(interval)
         logger.info("定时备份时间到，开始执行备份...")
         if perform_backup():
-            logger.info("备份成功，通知连接池刷新连接。")
+            logger.info("定时备份成功，通知连接池刷新连接。")
             pool.reset()
+        else:
+            logger.warning("定时备份失败，将在下一个备份周期重新尝试。")
 
 # ===============================================================
 # Flask 应用 (Flask Application)
