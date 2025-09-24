@@ -30,12 +30,12 @@
 - Python 3.7+
 - Flask
 
-### 安装步骤
+### 运行步骤
 
 1. 克隆项目到本地：
 
 ```bash
-git clone [项目地址]
+git clone https://github.com/QiaoKes/fntv-record-view
 cd fntv-record-view
 ```
 
@@ -57,6 +57,77 @@ python main.py
 
 5. 访问应用：
    打开浏览器访问 `http://localhost:5000`
+
+### 🐳 Docker Compose 部署（推荐）
+
+使用 Docker Compose 可以更简单地部署和管理应用。
+
+#### 前置条件
+
+- Docker 和 Docker Compose
+- 飞牛影视数据库文件目录
+
+#### 部署步骤
+
+1. 克隆项目：
+
+```bash
+git clone https://github.com/QiaoKes/fntv-record-view
+cd fntv-record-view
+```
+
+2. 按需修改 docker-compose.yml 中的参数：
+3. 启动服务：
+
+```bash
+docker-compose up -d
+```
+
+4. 查看运行状态：
+
+```bash
+docker-compose ps
+docker-compose logs -f fntv-record-view
+```
+
+5. 访问应用：
+   打开浏览器访问 `http://localhost:5000`
+
+#### 常用管理命令
+
+```bash
+# 停止服务
+docker-compose stop
+
+# 重启服务
+docker-compose restart
+
+# 查看日志
+docker-compose logs -f
+
+# 更新镜像并重新部署
+docker-compose pull
+docker-compose up -d
+
+# 完全清理（包括容器和网络）
+docker-compose down
+```
+
+#### Docker 部署特性
+
+- **🔒 安全隔离**：容器化运行，与宿主机隔离
+- **📊 资源限制**：自动限制内存使用（50M-100M）和CPU占用
+- **🔄 自动重启**：容器异常退出时自动重启
+- **💊 健康检查**：每30秒检查应用健康状态
+- **📝 日志管理**：支持日志文件持久化
+- **🔒 只读挂载**：数据库目录以只读方式挂载，确保数据安全
+
+#### 注意事项
+
+- 确保数据库目录路径正确且Docker有读取权限
+- 默认端口为5000，可在docker-compose.yml中修改
+- 日志文件会在当前目录下的app.log中持久化
+- 容器运行时使用非root用户，提高安全性
 
 ## 📊 界面展示
 
@@ -99,6 +170,22 @@ python main.py
   - 只读模式数据库连接 (`mode=ro`)
   - 递归深度限制防止死循环
   - 错误处理和日志记录
+
+### 🐳 容器化部署
+
+- **Docker 镜像**：
+
+  - 基于 Python 3.13-slim 镜像构建
+  - 预装 sqlite3 和 curl 工具
+  - 非 root 用户运行提高安全性
+  - 自动健康检查机制
+- **Docker Compose 配置**：
+
+  - 自动重启策略
+  - 资源使用限制（内存 50M-100M，CPU 0.5-1.0）
+  - 网络隔离（桥接网络）
+  - 数据库只读挂载
+  - 日志文件持久化
 
 ### 前端 (HTML/CSS/JavaScript)
 

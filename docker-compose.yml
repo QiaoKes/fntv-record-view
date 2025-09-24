@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  fntv-record-view:
+    build: .
+    container_name: fntv-record-view
+    ports:
+      - "5000:5000"
+    volumes:
+      # 只读挂载外部数据库目录到容器内的database目录
+      - /usr/local/apps/@appdata/trim.media/database:/app/database:ro
+      # 挂载日志文件（可写）
+      - ./app.log:/app/app.log
+    environment:
+      - FLASK_ENV=production
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    networks:
+      - fntv-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '1.0'
+        reservations:
+          memory: 50M
+          cpus: '0.5'
+
+networks:
+  fntv-network:
+    driver: bridge
