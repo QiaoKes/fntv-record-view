@@ -18,8 +18,23 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# 数据库路径
-DB_PATH = 'database/trimmedia.db'
+# 数据库路径 - 根据环境自动选择
+def get_db_path():
+    """获取数据库路径，支持Docker和本地环境"""
+    # Docker环境中的路径
+    docker_path = '/app/database/trimmedia.db'
+    # 本地开发环境路径
+    local_path = 'database/trimmedia.db'
+    
+    # 如果是Docker环境（通过环境变量或路径判断）
+    if os.path.exists('/app') and os.path.exists('/app/database'):
+        logger.info("检测到Docker环境，使用Docker路径")
+        return docker_path
+    else:
+        logger.info("检测到本地环境，使用相对路径")
+        return local_path
+
+DB_PATH = get_db_path()
 
 class DatabaseConnection:
     """数据库连接单例类"""
@@ -58,6 +73,7 @@ class DatabaseConnection:
             logger.info("数据库连接初始化成功（只读单例模式）")
         except Exception as e:
             logger.error(f"数据库连接初始化失败: {e}")
+            self._connection = None
             raise
     
     def get_connection(self):
@@ -70,6 +86,8 @@ class DatabaseConnection:
         """执行查询并返回结果"""
         try:
             conn = self.get_connection()
+            if conn is None:
+                raise sqlite3.Error("数据库连接为空")
             if params:
                 return conn.execute(query, params)
             else:
