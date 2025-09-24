@@ -9,6 +9,7 @@ import time
 from contextlib import contextmanager
 from queue import Queue, Empty, Full
 from typing import Iterator
+import random
 
 # ===============================================================
 # 配置部分 (Configuration)
@@ -35,8 +36,8 @@ def get_db_connection() -> Iterator[sqlite3.Connection]:
     增加了连接重试逻辑来处理临时的数据库锁定。
     """
     conn = None
-    max_retries = 5
-    base_delay = 0.05  # 50毫秒
+    max_retries = 10
+    base_delay = 0.2  # 200毫秒
 
     for attempt in range(max_retries):
         try:
