@@ -1181,6 +1181,8 @@
             if (page < 1 || page > totalPages || page === currentPage) return;
             
             currentPage = page;
+            // 滚动到页面顶部
+            window.scrollTo(0, 0);
             loadHistory(false); // 分页切换时不显示完整加载页面
         }
 
