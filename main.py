@@ -37,7 +37,7 @@ def get_db_connection() -> Iterator[sqlite3.Connection]:
     """
     conn = None
     max_retries = 10
-    base_delay = 0.2  # 200毫秒
+    base_delay = 0.05  # 50毫秒
 
     for attempt in range(max_retries):
         try:
