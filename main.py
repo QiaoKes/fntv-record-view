@@ -30,6 +30,8 @@ def get_db_connection():
         # 使用只读模式打开数据库连接
         conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row  # 使结果以字典形式返回
+        # 设置UTF-8编码和大小写不敏感的LIKE操作
+        conn.execute("PRAGMA case_sensitive_like = OFF")
         logger.debug("数据库连接成功（只读模式）")
         return conn
     except Exception as e:
@@ -131,6 +133,9 @@ def get_play_history():
     user_guid = request.args.get('user_guid', '')
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 20))
+    search_title = request.args.get('search_title', '').strip()
+    start_time = request.args.get('start_time', '')
+    end_time = request.args.get('end_time', '')
     
     conn = get_db_connection()
     
@@ -141,6 +146,55 @@ def get_play_history():
     if user_guid:
         where_clause += " AND iup.user_guid = ?"
         params.append(user_guid)
+    
+    # 模糊搜索剧集名称（包括父级项目名称）
+    if search_title:
+        # 添加调试日志
+        logger.info(f"搜索关键词: {search_title}")
+        
+        # 使用 CTE 递归查询来搜索整个层级结构中的名称
+        where_clause += """
+            AND EXISTS (
+                WITH RECURSIVE item_hierarchy(guid, title, original_title, parent_guid, level) AS (
+                    -- 起始项目
+                    SELECT guid, title, original_title, parent_guid, 0 as level
+                    FROM item 
+                    WHERE guid = i.guid
+                    
+                    UNION ALL
+                    
+                    -- 递归查找父级
+                    SELECT parent.guid, parent.title, parent.original_title, parent.parent_guid, ih.level + 1
+                    FROM item parent
+                    INNER JOIN item_hierarchy ih ON parent.guid = ih.parent_guid
+                    WHERE ih.level < 10 AND parent.guid IS NOT NULL
+                )
+                SELECT 1 FROM item_hierarchy 
+                WHERE title LIKE ? OR original_title LIKE ?
+            )
+        """
+        search_param = f"%{search_title}%"
+        params.extend([search_param, search_param])
+        logger.debug(f"搜索参数: {search_param}")
+    
+    # 播放时间范围筛选
+    if start_time:
+        try:
+            # 解析时间格式 YYYY-MM-DD HH:MM:SS
+            start_timestamp = int(datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S').timestamp() * 1000)
+            where_clause += " AND iup.update_time >= ?"
+            params.append(start_timestamp)
+        except ValueError:
+            logger.warning(f"无效的开始时间格式: {start_time}")
+    
+    if end_time:
+        try:
+            # 解析时间格式 YYYY-MM-DD HH:MM:SS
+            end_timestamp = int(datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S').timestamp() * 1000)
+            where_clause += " AND iup.update_time <= ?"
+            params.append(end_timestamp)
+        except ValueError:
+            logger.warning(f"无效的结束时间格式: {end_time}")
     
     # 获取总数
     count_query = f'''

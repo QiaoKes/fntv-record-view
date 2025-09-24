@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -533,9 +533,177 @@
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
         }
 
-        body.dark-mode .theme-toggle {
-            background: rgba(45, 55, 72, 0.9);
-            color: #e2e8f0;
+        /* 搜索控件样式 */
+        .search-controls {
+            margin-bottom: 16px;
+        }
+
+        .search-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .search-input-group label {
+            font-weight: 500;
+            color: #4a5568;
+            font-size: 0.9rem;
+        }
+
+        .search-input {
+            padding: 10px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+            background: white;
+            width: 100%;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+
+        .time-range-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .time-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .time-input {
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+            background: white;
+            color: #2d3748;
+        }
+
+        .time-input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+
+        /* datetime-local 输入框的特殊样式 */
+        .time-input::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: invert(0.5);
+        }
+
+        .time-input::-webkit-datetime-edit {
+            color: #2d3748;
+        }
+
+        .time-input::-webkit-datetime-edit-fields-wrapper {
+            color: #2d3748;
+        }
+
+        .time-input::-webkit-datetime-edit-text {
+            color: #2d3748;
+        }
+
+        .time-input::-webkit-datetime-edit-month-field,
+        .time-input::-webkit-datetime-edit-day-field,
+        .time-input::-webkit-datetime-edit-year-field,
+        .time-input::-webkit-datetime-edit-hour-field,
+        .time-input::-webkit-datetime-edit-minute-field {
+            color: #2d3748;
+        }
+
+        .btn-search {
+            background: linear-gradient(45deg, #4299e1, #3182ce);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-search:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(66, 153, 225, 0.3);
+        }
+
+        .btn-clear {
+            background: linear-gradient(45deg, #ed8936, #dd6b20);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-clear:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(237, 137, 54, 0.3);
+        }
+
+        /* 夜间模式搜索控件样式 */
+        body.dark-mode .search-input-group label,
+        body.dark-mode .time-input-group label {
+            color: #c9d1d9;
+        }
+
+        body.dark-mode .search-input,
+        body.dark-mode .time-input {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+        }
+
+        body.dark-mode .search-input:focus,
+        body.dark-mode .time-input:focus {
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+
+        /* 夜间模式下 datetime-local 输入框的特殊样式 */
+        body.dark-mode .time-input::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+        }
+
+        body.dark-mode .time-input::-webkit-datetime-edit,
+        body.dark-mode .time-input::-webkit-datetime-edit-fields-wrapper,
+        body.dark-mode .time-input::-webkit-datetime-edit-text,
+        body.dark-mode .time-input::-webkit-datetime-edit-month-field,
+        body.dark-mode .time-input::-webkit-datetime-edit-day-field,
+        body.dark-mode .time-input::-webkit-datetime-edit-year-field,
+        body.dark-mode .time-input::-webkit-datetime-edit-hour-field,
+        body.dark-mode .time-input::-webkit-datetime-edit-minute-field {
+            color: #e6edf3;
+        }
+
+        body.dark-mode .btn-search {
+            background: linear-gradient(45deg, #6366f1, #8b5cf6);
+        }
+
+        body.dark-mode .btn-search:hover {
+            background: linear-gradient(45deg, #7c3aed, #a855f7);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        body.dark-mode .btn-clear {
+            background: linear-gradient(45deg, #f59e0b, #d97706);
+        }
+
+        body.dark-mode .btn-clear:hover {
+            background: linear-gradient(45deg, #f59e0b, #d97706);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
         }
 
         @media (max-width: 768px) {
@@ -608,6 +776,27 @@
         <!-- 筛选控件 -->
         <div class="controls">
             <h3>🔍 筛选条件</h3>
+            
+            <!-- 搜索控件 -->
+            <div class="search-controls">
+                <div class="search-input-group">
+                    <label for="search-title">剧集名称搜索:</label>
+                    <input type="text" id="search-title" class="search-input" placeholder="输入剧集名称进行模糊搜索..." />
+                </div>
+            </div>
+
+            <!-- 时间范围筛选 -->
+            <div class="time-range-group">
+                <div class="time-input-group">
+                    <label for="start-time">开始时间:</label>
+                    <input type="datetime-local" id="start-time" class="time-input" />
+                </div>
+                <div class="time-input-group">
+                    <label for="end-time">结束时间:</label>
+                    <input type="datetime-local" id="end-time" class="time-input" />
+                </div>
+            </div>
+            
             <div class="filter-group">
                 <label for="user-select">选择用户:</label>
                 <select id="user-select">
@@ -622,7 +811,8 @@
                     <option value="100">100条</option>
                 </select>
                 
-                <button onclick="refreshData()">🔄 刷新数据</button>
+                <button class="btn-search" onclick="performImmediateSearch()">🔍 搜索</button>
+                <button class="btn-clear" onclick="clearFilters()">🧹 清除</button>
             </div>
         </div>
 
@@ -646,6 +836,7 @@
         let currentPage = 1;
         let totalPages = 1;
         let isLoading = false;
+        let searchTimeout = null; // 防抖搜索
 
         // 主题切换功能
         function toggleTheme() {
@@ -679,17 +870,32 @@
             initTheme();
             loadUsers();
             loadStats();
-            loadHistory();
+            loadHistory(true); // 初始加载显示完整加载页面
             
-            // 绑定事件
-            document.getElementById('user-select').addEventListener('change', function() {
-                currentPage = 1;
-                loadHistory();
-            });
-            
+            // 绑定事件 - 移除用户选择的自动刷新
             document.getElementById('per-page').addEventListener('change', function() {
                 currentPage = 1;
-                loadHistory();
+                loadHistory(true); // 更改每页显示数量时显示完整加载页面
+            });
+
+            // 绑定搜索框回车事件
+            document.getElementById('search-title').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performImmediateSearch();
+                }
+            });
+
+            // 绑定时间输入框回车事件
+            document.getElementById('start-time').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performImmediateSearch();
+                }
+            });
+
+            document.getElementById('end-time').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performImmediateSearch();
+                }
             });
         });
 
@@ -728,24 +934,70 @@
                 });
         }
 
+        // 执行搜索（带防抖）
+        function performSearch() {
+            // 清除之前的搜索定时器
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            // 设置新的搜索定时器，300ms后执行
+            searchTimeout = setTimeout(() => {
+                currentPage = 1;
+                loadHistory(false); // 搜索时不显示完整加载页面
+            }, 100);
+        }
+
+        // 立即搜索（用于按钮点击）
+        function performImmediateSearch() {
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+                searchTimeout = null;
+            }
+            currentPage = 1;
+            loadHistory(false); // 搜索时不显示完整加载页面
+        }
+
+        // 清除筛选条件并刷新数据
+        function clearFilters() {
+            document.getElementById('search-title').value = '';
+            document.getElementById('start-time').value = '';
+            document.getElementById('end-time').value = '';
+            document.getElementById('user-select').value = '';
+            currentPage = 1;
+            
+            // 刷新所有数据
+            loadUsers();
+            loadStats();
+            loadHistory(true); // 清除时显示完整加载页面
+        }
+
         // 加载播放历史
-        function loadHistory() {
+        function loadHistory(showLoading = true) {
             if (isLoading) return;
             
             isLoading = true;
             const historyList = document.getElementById('history-list');
             const historyInfo = document.getElementById('history-info');
             
-            // 显示加载状态
-            historyList.innerHTML = `
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <div>正在加载数据...</div>
-                </div>
-            `;
+            // 只在需要时显示加载状态（避免搜索时闪烁）
+            if (showLoading) {
+                historyList.innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <div>正在加载数据...</div>
+                    </div>
+                `;
+            } else {
+                // 搜索时在右上角显示小的加载指示器
+                historyInfo.innerHTML = `<span style="color: #4299e1;">🔍 搜索中...</span>`;
+            }
 
             const userGuid = document.getElementById('user-select').value;
             const perPage = document.getElementById('per-page').value;
+            const searchTitle = document.getElementById('search-title').value.trim();
+            const startTime = document.getElementById('start-time').value;
+            const endTime = document.getElementById('end-time').value;
             
             const params = new URLSearchParams({
                 page: currentPage,
@@ -756,13 +1008,66 @@
                 params.append('user_guid', userGuid);
             }
 
+            if (searchTitle) {
+                params.append('search_title', searchTitle);
+            }
+
+            if (startTime) {
+                // 转换为 YYYY-MM-DD HH:MM:SS 格式
+                const startDateTime = new Date(startTime);
+                const formattedStart = startDateTime.getFullYear() + '-' + 
+                    String(startDateTime.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(startDateTime.getDate()).padStart(2, '0') + ' ' + 
+                    String(startDateTime.getHours()).padStart(2, '0') + ':' + 
+                    String(startDateTime.getMinutes()).padStart(2, '0') + ':' + 
+                    String(startDateTime.getSeconds()).padStart(2, '0');
+                params.append('start_time', formattedStart);
+            }
+
+            if (endTime) {
+                // 转换为 YYYY-MM-DD HH:MM:SS 格式
+                const endDateTime = new Date(endTime);
+                const formattedEnd = endDateTime.getFullYear() + '-' + 
+                    String(endDateTime.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(endDateTime.getDate()).padStart(2, '0') + ' ' + 
+                    String(endDateTime.getHours()).padStart(2, '0') + ':' + 
+                    String(endDateTime.getMinutes()).padStart(2, '0') + ':' + 
+                    String(endDateTime.getSeconds()).padStart(2, '0');
+                params.append('end_time', formattedEnd);
+            }
+
             fetch(`/api/play_history?${params}`)
                 .then(response => response.json())
                 .then(data => {
                     totalPages = data.pages;
                     
+                    // 构建筛选条件描述
+                    let filterInfo = '';
+                    const activeFilters = [];
+                    
+                    if (document.getElementById('user-select').value) {
+                        const userName = document.getElementById('user-select').selectedOptions[0].textContent;
+                        activeFilters.push(`用户: ${userName}`);
+                    }
+                    
+                    if (document.getElementById('search-title').value.trim()) {
+                        activeFilters.push(`搜索: "${document.getElementById('search-title').value.trim()}"`);
+                    }
+                    
+                    if (document.getElementById('start-time').value) {
+                        activeFilters.push(`开始时间: ${document.getElementById('start-time').value}`);
+                    }
+                    
+                    if (document.getElementById('end-time').value) {
+                        activeFilters.push(`结束时间: ${document.getElementById('end-time').value}`);
+                    }
+                    
+                    if (activeFilters.length > 0) {
+                        filterInfo = ` (${activeFilters.join(', ')})`;
+                    }
+                    
                     // 更新信息
-                    historyInfo.innerHTML = `共 ${data.total} 条记录，第 ${data.page}/${data.pages} 页`;
+                    historyInfo.innerHTML = `共 ${data.total} 条记录，第 ${data.page}/${data.pages} 页${filterInfo}`;
                     
                     // 渲染历史记录
                     if (data.data.length === 0) {
@@ -770,6 +1075,7 @@
                             <div class="empty-state">
                                 <div class="empty-icon">📺</div>
                                 <div>暂无观看记录</div>
+                                ${activeFilters.length > 0 ? '<div style="margin-top: 10px; color: #999;">请尝试调整筛选条件</div>' : ''}
                             </div>
                         `;
                     } else {
@@ -875,14 +1181,7 @@
             if (page < 1 || page > totalPages || page === currentPage) return;
             
             currentPage = page;
-            loadHistory();
-        }
-
-        // 刷新数据
-        function refreshData() {
-            loadUsers();
-            loadStats();
-            loadHistory();
+            loadHistory(false); // 分页切换时不显示完整加载页面
         }
 
         // 夜间模式切换
@@ -913,25 +1212,8 @@
                 themeIcon.textContent = '🌙';
             }
         }
-
-        // 页面加载完成后初始化主题
-        document.addEventListener('DOMContentLoaded', function() {
-            initTheme();
-            loadUsers();
-            loadStats();
-            loadHistory();
-            
-            // 绑定事件
-            document.getElementById('user-select').addEventListener('change', function() {
-                currentPage = 1;
-                loadHistory();
-            });
-            
-            document.getElementById('per-page').addEventListener('change', function() {
-                currentPage = 1;
-                loadHistory();
-            });
-        });
     </script>
 </body>
 </html>
+
+
