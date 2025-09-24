@@ -3,6 +3,7 @@ import sqlite3
 import os
 import logging
 from datetime import datetime
+import threading
 
 # 配置日志
 logging.basicConfig(
@@ -20,23 +21,79 @@ app = Flask(__name__)
 # 数据库路径
 DB_PATH = 'database/trimmedia.db'
 
+class DatabaseConnection:
+    """数据库连接单例类"""
+    _instance = None
+    _lock = threading.Lock()
+    _connection = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(DatabaseConnection, cls).__new__(cls)
+                    cls._instance._initialize_connection()
+        return cls._instance
+    
+    def _initialize_connection(self):
+        """初始化数据库连接"""
+        try:
+            if not os.path.exists(DB_PATH):
+                logger.error(f"数据库文件不存在: {DB_PATH}")
+                raise FileNotFoundError(f"数据库文件不存在: {DB_PATH}")
+            
+            # 使用只读模式和WAL模式打开数据库连接
+            self._connection = sqlite3.connect(
+                f"file:{DB_PATH}?mode=ro&cache=shared", 
+                uri=True,
+                check_same_thread=False,  # 允许多线程使用同一连接
+                timeout=30.0  # 设置超时时间
+            )
+            self._connection.row_factory = sqlite3.Row  # 使结果以字典形式返回
+            # 设置UTF-8编码和大小写不敏感的LIKE操作
+            self._connection.execute("PRAGMA case_sensitive_like = OFF")
+            # 设置读取优化参数
+            self._connection.execute("PRAGMA query_only = ON")  # 只读模式
+            self._connection.execute("PRAGMA temp_store = MEMORY")  # 临时表存储在内存中
+            logger.info("数据库连接初始化成功（只读单例模式）")
+        except Exception as e:
+            logger.error(f"数据库连接初始化失败: {e}")
+            raise
+    
+    def get_connection(self):
+        """获取数据库连接"""
+        if self._connection is None:
+            self._initialize_connection()
+        return self._connection
+    
+    def execute(self, query, params=None):
+        """执行查询并返回结果"""
+        try:
+            conn = self.get_connection()
+            if params:
+                return conn.execute(query, params)
+            else:
+                return conn.execute(query)
+        except sqlite3.Error as e:
+            logger.error(f"数据库查询失败: {e}")
+            # 如果连接出现问题，尝试重新初始化
+            try:
+                self._initialize_connection()
+                conn = self.get_connection()
+                if params:
+                    return conn.execute(query, params)
+                else:
+                    return conn.execute(query)
+            except Exception as retry_e:
+                logger.error(f"数据库重连失败: {retry_e}")
+                raise
+
+# 创建全局数据库实例
+db = DatabaseConnection()
+
 def get_db_connection():
-    """获取数据库连接（只读模式）"""
-    try:
-        if not os.path.exists(DB_PATH):
-            logger.error(f"数据库文件不存在: {DB_PATH}")
-            raise FileNotFoundError(f"数据库文件不存在: {DB_PATH}")
-        
-        # 使用只读模式打开数据库连接
-        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        conn.row_factory = sqlite3.Row  # 使结果以字典形式返回
-        # 设置UTF-8编码和大小写不敏感的LIKE操作
-        conn.execute("PRAGMA case_sensitive_like = OFF")
-        logger.debug("数据库连接成功（只读模式）")
-        return conn
-    except Exception as e:
-        logger.error(f"数据库连接失败: {e}")
-        raise
+    """获取数据库连接（保持向后兼容）"""
+    return db.get_connection()
 
 def get_item_hierarchy(conn, item_guid, cache=None):
     """获取项目的完整层级信息（带缓存）"""
@@ -106,14 +163,12 @@ def index():
 @app.route('/api/users')
 def get_users():
     """获取所有用户列表"""
-    conn = get_db_connection()
-    users = conn.execute('''
+    users = db.execute('''
         SELECT guid, username, last_login_time, is_admin, status
         FROM user 
         WHERE status = 1 AND guid != 'default-user-template'
         ORDER BY username
     ''').fetchall()
-    conn.close()
     
     user_list = []
     for user in users:
@@ -205,7 +260,7 @@ def get_play_history():
         {where_clause}
     '''
     
-    total = conn.execute(count_query, params).fetchone()['total']
+    total = db.execute(count_query, params).fetchone()['total']
     
     # 获取播放历史数据
     offset = (page - 1) * per_page
@@ -238,7 +293,7 @@ def get_play_history():
     '''
     
     params.extend([per_page, offset])
-    history = conn.execute(query, params).fetchall()
+    history = db.execute(query, params).fetchall()
     
     # 批量获取层级信息
     hierarchy_cache = {}
@@ -305,8 +360,6 @@ def get_play_history():
             'is_episode': is_episode
         })
     
-    conn.close()
-    
     return jsonify({
         'total': total,
         'page': page,
@@ -318,31 +371,29 @@ def get_play_history():
 @app.route('/api/stats')
 def get_stats():
     """获取统计数据"""
-    conn = get_db_connection()
-    
     # 总用户数
-    total_users = conn.execute('''
+    total_users = db.execute('''
         SELECT COUNT(*) as count 
         FROM user 
         WHERE status = 1 AND guid != 'default-user-template'
     ''').fetchone()['count']
     
     # 总播放记录数
-    total_plays = conn.execute('''
+    total_plays = db.execute('''
         SELECT COUNT(*) as count 
         FROM item_user_play 
         WHERE visible = 1
     ''').fetchone()['count']
     
     # 活跃用户数（有播放记录的用户）
-    active_users = conn.execute('''
+    active_users = db.execute('''
         SELECT COUNT(DISTINCT user_guid) as count 
         FROM item_user_play 
         WHERE visible = 1
     ''').fetchone()['count']
     
     # 最新播放时间
-    latest_play = conn.execute('''
+    latest_play = db.execute('''
         SELECT MAX(update_time) as latest 
         FROM item_user_play 
         WHERE visible = 1
@@ -350,13 +401,11 @@ def get_stats():
     
     # 今日播放数
     today_start = int(datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
-    today_plays = conn.execute('''
+    today_plays = db.execute('''
         SELECT COUNT(*) as count 
         FROM item_user_play 
         WHERE visible = 1 AND update_time >= ?
     ''', (today_start,)).fetchone()['count']
-    
-    conn.close()
     
     return jsonify({
         'total_users': total_users,
@@ -369,10 +418,8 @@ def get_stats():
 @app.route('/api/user_activity')
 def get_user_activity():
     """获取用户活动数据"""
-    conn = get_db_connection()
-    
     # 用户播放次数统计
-    user_stats = conn.execute('''
+    user_stats = db.execute('''
         SELECT 
             u.username,
             u.guid,
@@ -386,8 +433,6 @@ def get_user_activity():
         ORDER BY play_count DESC
         LIMIT 10
     ''').fetchall()
-    
-    conn.close()
     
     activity_data = []
     for user in user_stats:
@@ -412,7 +457,6 @@ if __name__ == '__main__':
     try:
         # 检查数据库连接
         conn = get_db_connection()
-        conn.close()
         logger.info("数据库连接测试成功")
         
         app.run(debug=True, host='0.0.0.0', port=5000)
