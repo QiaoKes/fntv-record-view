@@ -412,14 +412,12 @@ if __name__ == '__main__':
     logger.info("访问地址: http://127.0.0.1:5000")
     logger.info("按 Ctrl+C 停止服务器")
     logger.info("=" * 50)
-    
+    app.run(debug=True, host='0.0.0.0', port=5000)
     try:
         # 检查数据库连接
         with get_db_connection() as conn:
             conn.execute("SELECT 1")  # 简单测试查询
             logger.info("数据库连接测试成功")
-        
-        app.run(debug=True, host='0.0.0.0', port=5000)
     except Exception as e:
         logger.error(f"启动失败: {e}")
         print(f"\n❌ 启动失败: {e}")
