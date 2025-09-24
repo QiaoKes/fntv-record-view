@@ -24,7 +24,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DB_PATH = "database/trimmedia.db"
+# 1. 获取当前文件 (main.py) 所在的目录的绝对路径
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'database', 'trimmedia.db')
 
 # ==============================================================================
 # 1. 重新引入一个健壮的数据库连接池
