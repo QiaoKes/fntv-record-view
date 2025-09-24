@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   fntv-record-view:
-    build: .
     container_name: fntv-record-view
+    image: qiaokes/fntv-record-view:latest
     ports:
       - "5000:5000"
     volumes:
@@ -16,13 +16,7 @@ services:
       - PYTHONPATH=/app
     restart: unless-stopped
     networks:
-      - fntv-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - bridge
     deploy:
       resources:
         limits:
@@ -31,7 +25,3 @@ services:
         reservations:
           memory: 50M
           cpus: '0.5'
-
-networks:
-  fntv-network:
-    driver: bridge
