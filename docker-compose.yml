@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   fntv-record-view:
     container_name: fntv-record-view
@@ -15,8 +13,7 @@ services:
       - FLASK_ENV=production
       - PYTHONPATH=/app
     restart: unless-stopped
-    networks:
-      - bridge
+    network_mode: bridge
     deploy:
       resources:
         limits:
