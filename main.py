@@ -28,100 +28,47 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'database', 'trimmedia.db')
 
-# ==============================================================================
-# 1. 重新引入一个健壮的数据库连接池
-# ==============================================================================
-class SQLiteConnectionPool:
-    def __init__(self, db_path, pool_size=3, timeout=5):
-        self.db_path = db_path
-        self.pool_size = pool_size
-        self.timeout = timeout
-        self._pool = Queue(maxsize=pool_size)
-        self._lock = threading.Lock()
-        
-        # 预先填充连接池
-        for _ in range(pool_size):
-            try:
-                conn = self._create_connection()
-                self._pool.put(conn)
-            except sqlite3.OperationalError as e:
-                logger.error(f"初始化连接池失败: {e}")
-                # 如果初始化失败，可能数据库有问题，后续get会处理
-                break
-
-    def _create_connection(self):
-        """创建一个新的数据库连接。"""
-        try:
-            conn = sqlite3.connect(f"file:{self.db_path}?mode=ro&nolock=1", uri=True, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            logger.info("成功创建一个新的数据库连接。")
-            return conn
-        except sqlite3.OperationalError as e:
-            logger.error(f"创建数据库连接失败: {e}")
-            raise
-
-    def get_connection(self) -> sqlite3.Connection:
-        """从池中获取一个连接。"""
-        try:
-            # 在指定超时时间内等待可用连接
-            return self._pool.get(timeout=self.timeout)
-        except Empty:
-            # 如果超时后池仍为空，说明连接非常繁忙
-            raise TimeoutError(f"在 {self.timeout} 秒内无法从连接池获取连接。")
-
-    def return_connection(self, conn: sqlite3.Connection):
-        """将连接返回到池中。"""
-        try:
-            # 检查连接是否仍然有效，如果无效则丢弃
-            conn.execute("SELECT 1")
-            self._pool.put(conn, block=False)
-        except (sqlite3.ProgrammingError, sqlite3.OperationalError):
-             # 连接已关闭或损坏，丢弃它并尝试创建一个新的来补充
-             logger.warning("返回的连接无效，已丢弃。尝试创建新连接补充。")
-             try:
-                 new_conn = self._create_connection()
-                 self._pool.put(new_conn, block=False)
-             except (sqlite3.OperationalError, Full):
-                 pass # 如果池已满或创建失败，则暂时不补充
-        except Full:
-            # 如果池已满（可能在多线程环境中发生），直接关闭这个多余的连接
-            conn.close()
-
-    def close_all(self):
-        """关闭池中所有的连接。"""
-        logger.info("正在关闭所有数据库连接...")
-        while not self._pool.empty():
-            try:
-                conn = self._pool.get(block=False)
-                conn.close()
-            except Empty:
-                break
-        logger.info("连接池已清空。")
-
-# ==============================================================================
-# 2. 全局实例化连接池
-# ==============================================================================
-db_pool = SQLiteConnectionPool(DB_PATH, pool_size=3)
-
-
-# ==============================================================================
-# 3. 修改 get_db_connection 以使用连接池
-# ==============================================================================
 @contextmanager
 def get_db_connection() -> Iterator[sqlite3.Connection]:
     """
-    从连接池中获取一个数据库连接，并在使用后将其安全地返回池中。
+    为每个请求创建一个新的只读数据库连接，并在请求结束后自动关闭它。
+    增加了连接重试逻辑来处理临时的数据库锁定。
     """
     conn = None
+    max_retries = 5
+    base_delay = 0.05  # 50毫秒
+
+    for attempt in range(max_retries):
+        try:
+            # 仍然是按需创建连接
+            conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            # 连接成功，跳出循环
+            break
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                if attempt < max_retries - 1:
+                    # 使用带随机抖动的指数退避策略，避免同时重试
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 0.05)
+                    logger.warning(f"数据库被锁定，将在 {delay:.2f} 秒后重试... (尝试 {attempt + 2}/{max_retries})")
+                    time.sleep(delay)
+                else:
+                    logger.error("多次重试后数据库仍然被锁定。")
+                    raise  # 重试次数用尽，向上抛出异常
+            else:
+                # 其他类型的错误，直接抛出
+                logger.error(f"数据库连接或操作失败: {e}")
+                raise
+    
+    # 如果 conn 仍然是 None (虽然理论上上面的逻辑会抛异常，但作为保险)
+    if not conn:
+        raise sqlite3.OperationalError("无法建立数据库连接。")
+
     try:
-        conn = db_pool.get_connection()
         yield conn
-    except Exception as e:
-        logger.error(f"处理数据库请求时出错: {e}")
-        raise
     finally:
         if conn:
-            db_pool.return_connection(conn)
+            conn.close()
 
 # ===============================================================
 # Flask 应用 (Flask Application)
