@@ -1,0 +1,3 @@
+flask
+sqlite3
+jinja2

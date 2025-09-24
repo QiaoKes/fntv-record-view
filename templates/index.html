@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>飞牛影视 - 观看历史</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            color: #2d3748;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #e2e8f0;
+            border-radius: 25px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #4a5568;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        body.dark-mode .theme-toggle {
+            background: rgba(22, 27, 34, 0.9);
+            border-color: #30363d;
+            color: #e6edf3;
+        }
+
+        body.dark-mode .theme-toggle:hover {
+            background: rgba(22, 27, 34, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 8px;
+            text-align: center;
+            transition: color 0.3s ease;
+        }
+
+        .header p {
+            color: #718096;
+            text-align: center;
+            font-size: 1.1rem;
+            transition: color 0.3s ease;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #4299e1;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .label {
+            color: #718096;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .controls h3 {
+            margin-bottom: 16px;
+            color: #1a202c;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-group label {
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        select, input {
+            padding: 10px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+            background: white;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+
+        button {
+            padding: 10px 20px;
+            background: linear-gradient(45deg, #4299e1, #3182ce);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(66, 153, 225, 0.3);
+        }
+
+        .history-container {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            overflow: hidden;
+        }
+
+        .history-header {
+            padding: 24px;
+            background: linear-gradient(45deg, #4299e1, #3182ce);
+            color: white;
+        }
+
+        .history-header h3 {
+            font-size: 1.35rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #f7fafc;
+            transition: background-color 0.2s ease;
+        }
+
+        .history-item:hover {
+            background-color: #f7fafc;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .item-info {
+            flex: 1;
+        }
+
+        .item-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 6px;
+            color: #1a202c;
+        }
+
+        .item-meta {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .meta-tag {
+            padding: 4px 10px;
+            background: #edf2f7;
+            color: #2d3748;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .item-progress {
+            margin-top: 12px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #edf2f7;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #4299e1, #3182ce);
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 0.85rem;
+            color: #718096;
+            margin-top: 6px;
+        }
+
+        .item-user {
+            margin-left: 20px;
+            text-align: right;
+            min-width: 120px;
+        }
+
+        .user-name {
+            font-weight: 500;
+            color: #4299e1;
+            margin-bottom: 6px;
+        }
+
+        .play-time {
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+
+        .pagination {
+            padding: 24px;
+            text-align: center;
+            background: #f7fafc;
+            border-top: 1px solid #edf2f7;
+        }
+
+        .pagination button {
+            margin: 0 4px;
+            padding: 8px 16px;
+            background: #718096;
+        }
+
+        .pagination button.active {
+            background: linear-gradient(45deg, #4299e1, #3182ce);
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #718096;
+        }
+
+        .spinner {
+            border: 3px solid #edf2f7;
+            border-top: 3px solid #4299e1;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a0aec0;
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        /* 夜间模式样式 */
+        body.dark-mode {
+            background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #161b22 100%);
+            color: #e6edf3;
+        }
+
+        body.dark-mode .header {
+            background: rgba(22, 27, 34, 0.95);
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        body.dark-mode .header h1 {
+            color: #f0f6fc;
+        }
+
+        body.dark-mode .header p {
+            color: #8b949e;
+        }
+
+        body.dark-mode .stat-card {
+            background: rgba(22, 27, 34, 0.95);
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        body.dark-mode .stat-card .number {
+            color: #58a6ff;
+        }
+
+        body.dark-mode .stat-card .label {
+            color: #8b949e;
+        }
+
+        body.dark-mode .controls {
+            background: rgba(22, 27, 34, 0.95);
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        body.dark-mode .controls h3 {
+            color: #f0f6fc;
+        }
+
+        body.dark-mode .filter-group label {
+            color: #c9d1d9;
+        }
+
+        body.dark-mode select, 
+        body.dark-mode input {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+        }
+
+        body.dark-mode select:focus, 
+        body.dark-mode input:focus {
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+
+        body.dark-mode button {
+            background: linear-gradient(45deg, #6366f1, #8b5cf6);
+            border: 1px solid #30363d;
+        }
+
+        body.dark-mode button:hover {
+            background: linear-gradient(45deg, #7c3aed, #a855f7);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3);
+        }
+
+        body.dark-mode .history-container {
+            background: rgba(22, 27, 34, 0.95);
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        body.dark-mode .history-item {
+            border-bottom: 1px solid #21262d;
+        }
+
+        body.dark-mode .history-item:hover {
+            background-color: rgba(33, 38, 45, 0.7);
+        }
+
+        body.dark-mode .item-title {
+            color: #f0f6fc;
+        }
+
+        body.dark-mode .meta-tag {
+            background: rgba(33, 38, 45, 0.8);
+            color: #8b949e;
+            border: 1px solid #30363d;
+        }
+
+        body.dark-mode .progress-bar {
+            background: #21262d;
+        }
+
+        body.dark-mode .progress-fill {
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        body.dark-mode .progress-text {
+            color: #8b949e;
+        }
+
+        body.dark-mode .user-name {
+            color: #58a6ff;
+        }
+
+        body.dark-mode .play-time {
+            color: #7d8590;
+        }
+
+        body.dark-mode .pagination {
+            background: rgba(22, 27, 34, 0.95);
+            border-top: 1px solid #30363d;
+        }
+
+        body.dark-mode .pagination a {
+            color: #58a6ff;
+            background: rgba(33, 38, 45, 0.8);
+            border: 1px solid #30363d;
+        }
+
+        body.dark-mode .pagination a:hover {
+            background: rgba(88, 166, 255, 0.15);
+        }
+
+        body.dark-mode .pagination span {
+            color: #8b949e;
+        }
+
+        body.dark-mode .loading {
+            color: #8b949e;
+        }
+
+        body.dark-mode .spinner {
+            border-color: #21262d;
+            border-top-color: #58a6ff;
+        }
+
+        body.dark-mode .empty-state {
+            color: #7d8590;
+        }
+
+        body.dark-mode .history-header {
+            background: linear-gradient(45deg, #6366f1, #8b5cf6);
+            color: #f0f6fc;
+        }
+
+        body.dark-mode .history-header h3 {
+            color: #f0f6fc;
+        }
+
+        body.dark-mode #history-info {
+            color: #e6edf3;
+            opacity: 0.9;
+        }
+
+        /* 主题切换按钮 */
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        body.dark-mode .theme-toggle {
+            background: rgba(45, 55, 72, 0.9);
+            color: #e2e8f0;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+            }
+            
+            .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .history-item {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 15px 20px;
+            }
+            
+            .item-user {
+                margin-left: 0;
+                margin-top: 10px;
+                text-align: left;
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 主题切换按钮 -->
+    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+        <span id="theme-icon">🌙</span>
+    </button>
+    
+    <div class="container">
+        <!-- 页面标题 -->
+        <div class="header">
+            <h1>🎬 飞牛影视</h1>
+            <p>观看历史记录管理</p>
+        </div>
+
+        <!-- 统计数据 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="number" id="total-users">-</div>
+                <div class="label">总用户数</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="active-users">-</div>
+                <div class="label">活跃用户</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="total-plays">-</div>
+                <div class="label">播放记录</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="today-plays">-</div>
+                <div class="label">今日播放</div>
+            </div>
+        </div>
+
+        <!-- 筛选控件 -->
+        <div class="controls">
+            <h3>🔍 筛选条件</h3>
+            <div class="filter-group">
+                <label for="user-select">选择用户:</label>
+                <select id="user-select">
+                    <option value="">所有用户</option>
+                </select>
+                
+                <label for="per-page">每页显示:</label>
+                <select id="per-page">
+                    <option value="10">10条</option>
+                    <option value="20" selected>20条</option>
+                    <option value="50">50条</option>
+                    <option value="100">100条</option>
+                </select>
+                
+                <button onclick="refreshData()">🔄 刷新数据</button>
+            </div>
+        </div>
+
+        <!-- 播放历史 -->
+        <div class="history-container">
+            <div class="history-header">
+                <h3>📺 观看历史</h3>
+                <div id="history-info">正在加载...</div>
+            </div>
+            <div class="history-list" id="history-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div>正在加载数据...</div>
+                </div>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let totalPages = 1;
+        let isLoading = false;
+
+        // 主题切换功能
+        function toggleTheme() {
+            const body = document.body;
+            const themeIcon = document.getElementById('theme-icon');
+            
+            if (body.classList.contains('dark-mode')) {
+                body.classList.remove('dark-mode');
+                themeIcon.textContent = '🌙';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.classList.add('dark-mode');
+                themeIcon.textContent = '☀️';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // 初始化主题
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+                document.body.classList.add('dark-mode');
+                document.getElementById('theme-icon').textContent = '☀️';
+            }
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initTheme();
+            loadUsers();
+            loadStats();
+            loadHistory();
+            
+            // 绑定事件
+            document.getElementById('user-select').addEventListener('change', function() {
+                currentPage = 1;
+                loadHistory();
+            });
+            
+            document.getElementById('per-page').addEventListener('change', function() {
+                currentPage = 1;
+                loadHistory();
+            });
+        });
+
+        // 加载用户列表
+        function loadUsers() {
+            fetch('/api/users')
+                .then(response => response.json())
+                .then(users => {
+                    const select = document.getElementById('user-select');
+                    select.innerHTML = '<option value="">所有用户</option>';
+                    
+                    users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.guid;
+                        option.textContent = `${user.username}${user.is_admin ? ' (管理员)' : ''}`;
+                        select.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('加载用户列表失败:', error);
+                });
+        }
+
+        // 加载统计数据
+        function loadStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(stats => {
+                    document.getElementById('total-users').textContent = stats.total_users;
+                    document.getElementById('active-users').textContent = stats.active_users;
+                    document.getElementById('total-plays').textContent = stats.total_plays;
+                    document.getElementById('today-plays').textContent = stats.today_plays;
+                })
+                .catch(error => {
+                    console.error('加载统计数据失败:', error);
+                });
+        }
+
+        // 加载播放历史
+        function loadHistory() {
+            if (isLoading) return;
+            
+            isLoading = true;
+            const historyList = document.getElementById('history-list');
+            const historyInfo = document.getElementById('history-info');
+            
+            // 显示加载状态
+            historyList.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div>正在加载数据...</div>
+                </div>
+            `;
+
+            const userGuid = document.getElementById('user-select').value;
+            const perPage = document.getElementById('per-page').value;
+            
+            const params = new URLSearchParams({
+                page: currentPage,
+                per_page: perPage
+            });
+            
+            if (userGuid) {
+                params.append('user_guid', userGuid);
+            }
+
+            fetch(`/api/play_history?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    totalPages = data.pages;
+                    
+                    // 更新信息
+                    historyInfo.innerHTML = `共 ${data.total} 条记录，第 ${data.page}/${data.pages} 页`;
+                    
+                    // 渲染历史记录
+                    if (data.data.length === 0) {
+                        historyList.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-icon">📺</div>
+                                <div>暂无观看记录</div>
+                            </div>
+                        `;
+                    } else {
+                        historyList.innerHTML = data.data.map(item => {
+                            // 创建标签数组并去重
+                            const tags = [];
+                            if (item.type) tags.push(item.type);
+                            if (item.play_type && item.play_type !== item.type) tags.push(item.play_type);
+                            if (item.resolution) tags.push(item.resolution);
+                            if (item.watched) tags.push('已完成');
+                            
+                            // 去重
+                            const uniqueTags = [...new Set(tags)];
+                            
+                            return `
+                            <div class="history-item">
+                                <div class="item-info">
+                                    <div class="item-title">${item.title}</div>
+                                    <div class="item-meta">
+                                        ${uniqueTags.map(tag => `<span class="meta-tag">${tag}</span>`).join('')}
+                                    </div>
+                                    ${item.overview ? `<div style="color: #666; font-size: 0.9rem; margin-top: 5px;">${item.overview.substring(0, 100)}...</div>` : ''}
+                                    <div class="item-progress">
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: ${item.watched ? 100 : item.progress}%"></div>
+                                        </div>
+                                        <div class="progress-text">
+                                            ${item.watched ? '已观看完成' : `播放进度: ${item.position_formatted} / ${item.runtime_formatted} (${item.progress}%)`}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="item-user">
+                                    <div class="user-name">${item.username}</div>
+                                    <div class="play-time">开始: ${item.create_time}</div>
+                                    <div class="play-time">最近: ${item.update_time}</div>
+                                </div>
+                            </div>
+                        `;
+                        }).join('');
+                    }
+                    
+                    // 渲染分页
+                    renderPagination(data.page, data.pages);
+                })
+                .catch(error => {
+                    console.error('加载播放历史失败:', error);
+                    historyList.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">❌</div>
+                            <div>加载数据失败</div>
+                        </div>
+                    `;
+                })
+                .finally(() => {
+                    isLoading = false;
+                });
+        }
+
+        // 渲染分页
+        function renderPagination(page, pages) {
+            const pagination = document.getElementById('pagination');
+            
+            if (pages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // 上一页
+            html += `<button ${page <= 1 ? 'disabled' : ''} onclick="changePage(${page - 1})">« 上一页</button>`;
+            
+            // 页码
+            const startPage = Math.max(1, page - 2);
+            const endPage = Math.min(pages, page + 2);
+            
+            if (startPage > 1) {
+                html += `<button onclick="changePage(1)">1</button>`;
+                if (startPage > 2) {
+                    html += `<span style="padding: 0 10px;">...</span>`;
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="${i === page ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+            }
+            
+            if (endPage < pages) {
+                if (endPage < pages - 1) {
+                    html += `<span style="padding: 0 10px;">...</span>`;
+                }
+                html += `<button onclick="changePage(${pages})">${pages}</button>`;
+            }
+            
+            // 下一页
+            html += `<button ${page >= pages ? 'disabled' : ''} onclick="changePage(${page + 1})">下一页 »</button>`;
+            
+            pagination.innerHTML = html;
+        }
+
+        // 切换页面
+        function changePage(page) {
+            if (page < 1 || page > totalPages || page === currentPage) return;
+            
+            currentPage = page;
+            loadHistory();
+        }
+
+        // 刷新数据
+        function refreshData() {
+            loadUsers();
+            loadStats();
+            loadHistory();
+        }
+
+        // 夜间模式切换
+        function toggleTheme() {
+            const body = document.body;
+            const themeIcon = document.getElementById('theme-icon');
+            
+            if (body.classList.contains('dark-mode')) {
+                body.classList.remove('dark-mode');
+                themeIcon.textContent = '🌙';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.classList.add('dark-mode');
+                themeIcon.textContent = '☀️';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // 初始化主题
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const themeIcon = document.getElementById('theme-icon');
+            
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                themeIcon.textContent = '☀️';
+            } else {
+                themeIcon.textContent = '🌙';
+            }
+        }
+
+        // 页面加载完成后初始化主题
+        document.addEventListener('DOMContentLoaded', function() {
+            initTheme();
+            loadUsers();
+            loadStats();
+            loadHistory();
+            
+            // 绑定事件
+            document.getElementById('user-select').addEventListener('change', function() {
+                currentPage = 1;
+                loadHistory();
+            });
+            
+            document.getElementById('per-page').addEventListener('change', function() {
+                currentPage = 1;
+                loadHistory();
+            });
+        });
+    </script>
+</body>
+</html>
