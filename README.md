@@ -2,7 +2,7 @@
 
 🎬 一个专为飞牛影视数据库设计管理界面的观看历史记录查看系统。
 
-<img src="docs/sample.png" width="100%">
+<img src="docs/sample-1.png" width="100%">
 
 ## ✨ 功能特性
 
