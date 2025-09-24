@@ -176,10 +176,9 @@ docker-compose down
 
 - **Docker 镜像**：
 
-  - 基于 Python 3.13-slim 镜像构建
-  - 预装 sqlite3 和 curl 工具
-  - 非 root 用户运行提高安全性
-  - 自动健康检查机制
+  - 基于 Python 3.13-alpine 镜像构建
+  - 极简化配置，无额外系统依赖
+  - 轻量级镜像，快速启动
 - **Docker Compose 配置**：
 
   - 自动重启策略

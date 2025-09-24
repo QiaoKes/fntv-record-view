@@ -19,6 +19,18 @@ fi
 if [ ! -f "/app/database/trimmedia.db" ]; then
     echo "❌ 错误: 数据库文件 /app/database/trimmedia.db 不存在"
     echo "请确保外部数据库目录正确挂载到 /app/database"
+    echo "当前目录内容:"
+    ls -la /app/database/ || echo "无法列出数据库目录内容"
+    exit 1
+fi
+
+# 检查数据库文件权限
+if [ ! -r "/app/database/trimmedia.db" ]; then
+    echo "❌ 错误: 无法读取数据库文件"
+    echo "文件权限信息:"
+    ls -la /app/database/trimmedia.db
+    echo "当前用户: $(whoami)"
+    echo "当前用户组: $(id)"
     exit 1
 fi
 

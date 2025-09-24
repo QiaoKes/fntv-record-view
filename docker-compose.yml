@@ -7,8 +7,6 @@ services:
     volumes:
       # 只读挂载外部数据库目录到容器内的database目录
       - /usr/local/apps/@appdata/trim.media/database:/app/database:ro
-      # 挂载日志文件（可写）
-      - ./app.log:/app/app.log
     environment:
       - FLASK_ENV=production
       - PYTHONPATH=/app
