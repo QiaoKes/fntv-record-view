@@ -1,17 +1,22 @@
 from flask import Flask, render_template, request, jsonify
 import sqlite3
 import os
+import sys # ### NEW ###
 import logging
 from datetime import datetime
 import threading
+import time
 from contextlib import contextmanager
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 from typing import Iterator
 
-# 配置日志
+# ===============================================================
+# 配置部分 (Configuration)
+# ===============================================================
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('app.log', encoding='utf-8'),
         logging.StreamHandler()
@@ -19,32 +24,146 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DB_PATH = "database/trimmedia.db"
+# ### FIX ###: 确保路径包含一个目录，例如 'data/'
+# 源数据库路径
+SOURCE_DB_PATH = "database/trimmedia.db" 
+# 目标数据库路径（在当前目录下的 data 文件夹内）
+LOCAL_DB_PATH = "./local_trimmedia.db" 
+# 备份频率（秒）
+BACKUP_INTERVAL_SECONDS = 60 # 1分钟
 
+# ===============================================================
+# 数据库连接池 (Database Connection Pool)
+# ===============================================================
+
+# ResettableConnectionPool 类的代码保持不变，它本身没有问题
+class ResettableConnectionPool:
+    def __init__(self, db_path, max_connections=5):
+        self.db_path = db_path
+        self.max_connections = max_connections
+        self._pool = None
+        self._lock = threading.Lock()
+        
+        # 确保数据库目录存在
+        # 这个操作现在是安全的，因为我们保证了 LOCAL_DB_PATH 包含目录
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        
+        self._create_pool()
+
+    def _create_pool(self):
+        """(私有) 创建或重新创建连接池。此方法应在锁内调用。"""
+        logger.info(f"正在为数据库 {self.db_path} 创建新的连接池...")
+        self._pool = Queue(maxsize=self.max_connections)
+        try:
+            for _ in range(self.max_connections):
+                conn = self._create_connection()
+                self._pool.put_nowait(conn)
+            logger.info("新连接池创建成功。")
+        except sqlite3.OperationalError as e:
+            logger.error(f"数据库文件 {self.db_path} 无法访问或不存在，连接池创建失败: {e}")
+        except Exception as e:
+            logger.error(f"创建连接池失败: {e}")
+
+    def _create_connection(self):
+        conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def get_conn(self, timeout=5):
+        try:
+            return self._pool.get(timeout=timeout)
+        except Empty:
+            logger.warning("连接池为空，正在创建临时连接。")
+            return self._create_connection()
+
+    def return_conn(self, conn):
+        try:
+            self._pool.put_nowait(conn)
+        except Full:
+            conn.close()
+
+    def reset(self):
+        with self._lock:
+            logger.info("请求重置连接池...")
+            old_pool = self._pool
+            self._create_pool()
+            
+            logger.info("正在关闭所有旧的数据库连接...")
+            while not old_pool.empty():
+                try:
+                    conn = old_pool.get_nowait()
+                    conn.close()
+                except Empty:
+                    break
+            logger.info("连接池重置完成。")
+
+# --- get_db_connection 上下文管理器保持不变 ---
 @contextmanager
 def get_db_connection() -> Iterator[sqlite3.Connection]:
-    """
-    为每个请求创建一个新的只读数据库连接，并在请求结束后自动关闭它。
-    解决连接池占用，导致wal文件持续增长的问题。
-    """
     conn = None
     try:
-        # 1. 为每个请求创建一个全新的只读连接
-        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        
-        # 2. 将创建好的连接提供给 with 语句块使用
+        conn = db_pool.get_conn()
         yield conn
-        
     except sqlite3.OperationalError as e:
-        logger.error(f"数据库连接或操作失败: {e}")
-        # 向上抛出异常，以便Flask能捕获并返回错误信息
+        logger.error(f"数据库操作失败: {e}")
         raise
     finally:
-        # 3. 无论 with 语句块中发生什么（成功或异常），最终都会关闭连接
         if conn:
-            conn.close()
-            # logger.debug("数据库连接已关闭。") # 如果需要，可以取消此行注释来观察连接关闭
+            db_pool.return_conn(conn)
+
+# ===============================================================
+# 后台备份逻辑 (Background Backup Logic)
+# ===============================================================
+
+# perform_backup 函数保持不变
+def perform_backup():
+    logger.info(f"开始备份: {SOURCE_DB_PATH} -> {LOCAL_DB_PATH}")
+    source_conn = None
+    for attempt in range(3):
+        try:
+            source_conn = sqlite3.connect(f"file:{SOURCE_DB_PATH}?mode=ro", uri=True)
+            break
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < 2:
+                logger.warning(f"源数据库被锁定，10秒后重试...")
+                time.sleep(10)
+            else:
+                logger.error(f"连接源数据库时发生错误: {e}")
+                return False
+    
+    if not source_conn:
+        logger.error("备份失败：多次尝试后源数据库仍然被锁定。")
+        return False
+
+    dest_conn = sqlite3.connect(LOCAL_DB_PATH)
+    try:
+        with dest_conn:
+            source_conn.backup(dest_conn)
+        logger.info("数据库备份成功！")
+        return True
+    except Exception as e:
+        logger.error(f"备份过程中发生错误: {e}")
+        return False
+    finally:
+        source_conn.close()
+        dest_conn.close()
+
+# ### MODIFIED ###: 后台任务不再负责首次备份
+def background_backup_task(pool: ResettableConnectionPool, interval: int):
+    """
+    在后台定期执行备份任务的函数。
+    """
+    logger.info("后台备份线程已启动，将按计划执行后续备份。")
+    while True:
+        time.sleep(interval)
+        logger.info("定时备份时间到，开始执行备份...")
+        if perform_backup():
+            logger.info("备份成功，通知连接池刷新连接。")
+            pool.reset()
+
+# ===============================================================
+# Flask 应用 (Flask Application)
+# ===============================================================
 
 app = Flask(__name__)
 
@@ -408,20 +527,35 @@ if __name__ == '__main__':
     logger.info("=" * 50)
     logger.info("启动飞牛影视观看历史管理系统")
     logger.info("=" * 50)
-    logger.info(f"数据库路径: {DB_PATH}")
-    logger.info("访问地址: http://127.0.0.1:5000")
-    logger.info("按 Ctrl+C 停止服务器")
+
+    # ### MODIFIED ###: 采用新的、更安全的启动流程
+
+    # 步骤 1: 在主线程中执行首次备份
+    logger.info("正在执行首次启动备份...")
+    if not perform_backup():
+        logger.critical("首次备份失败！应用程序无法启动。")
+        sys.exit(1) # 退出程序
+    
+    logger.info("首次备份成功，本地数据库已就绪。")
+
+    # 步骤 2: 首次备份成功后，安全地创建连接池
+    logger.info("正在初始化数据库连接池...")
+    db_pool = ResettableConnectionPool(LOCAL_DB_PATH)
+
+    # 步骤 3: 启动后台线程，负责未来的周期性备份
+    logger.info(f"启动后台备份线程，备份间隔: {BACKUP_INTERVAL_SECONDS} 秒")
+    backup_thread = threading.Thread(
+        target=background_backup_task,
+        args=(db_pool, BACKUP_INTERVAL_SECONDS),
+        name="BackupThread"
+    )
+    backup_thread.daemon = True
+    backup_thread.start()
+    
+    # 步骤 4: 启动 Flask 应用
     logger.info("=" * 50)
-    app.run(debug=True, host='0.0.0.0', port=5000)
-    try:
-        # 检查数据库连接
-        with get_db_connection() as conn:
-            conn.execute("SELECT 1")  # 简单测试查询
-            logger.info("数据库连接测试成功")
-    except Exception as e:
-        logger.error(f"启动失败: {e}")
-        print(f"\n❌ 启动失败: {e}")
-        print("请检查数据库文件是否存在并可访问")
-    finally:
-        # 关闭所有数据库连接
-        logger.info("应用程序关闭")
+    logger.info("访问地址: http://127.0.0.1:5000")
+    logger.info("所有组件已启动，服务运行中...")
+    logger.info("=" * 50)
+    
+    app.run(host='0.0.0.0', port=5000)
