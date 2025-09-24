@@ -21,126 +21,31 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = "database/trimmedia.db"
 
-class SQLiteConnectionPool:
-    """简单的SQLite连接池实现"""
-    
-    def __init__(self, db_path, pool_size=10):
-        self.db_path = db_path
-        self.pool_size = pool_size
-        self._pool = Queue(maxsize=pool_size)
-        self._lock = threading.Lock()
-        self._created_connections = 0
-        self._initialize_pool()
-    
-    def _initialize_pool(self):
-        """初始化连接池"""
-        for _ in range(min(5, self.pool_size)):  # 预先创建5个连接
-            conn = self._create_connection()
-            if conn:
-                self._pool.put(conn)
-    
-    def _create_connection(self):
-        """创建新的数据库连接"""
-        try:
-            if not os.path.exists(self.db_path):
-                logger.error(f"数据库文件不存在: {self.db_path}")
-                raise FileNotFoundError(f"数据库文件不存在: {self.db_path}")
-            
-            # 使用只读模式打开数据库连接
-            conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
-            conn.row_factory = sqlite3.Row  # 使结果以字典形式返回
-            # 设置UTF-8编码和大小写不敏感的LIKE操作
-            conn.execute("PRAGMA case_sensitive_like = OFF")
-            
-            with self._lock:
-                self._created_connections += 1
-            
-            logger.debug(f"创建新的数据库连接，总连接数: {self._created_connections}")
-            return conn
-        except Exception as e:
-            logger.error(f"创建数据库连接失败: {e}")
-            return None
-    
-    def get_connection(self, timeout=5):
-        """从连接池获取连接"""
-        try:
-            # 尝试从连接池获取连接
-            conn = self._pool.get(timeout=timeout)
-            # 检查连接是否有效
-            if self._is_connection_valid(conn):
-                return conn
-            else:
-                # 连接无效，创建新连接
-                logger.warning("检测到无效连接，创建新连接")
-                conn.close()
-                return self._create_connection()
-        except Empty:
-            # 连接池为空且超时，创建新连接
-            if self._created_connections < self.pool_size:
-                logger.info("连接池为空，创建新连接")
-                return self._create_connection()
-            else:
-                logger.error("连接池已满且获取连接超时")
-                raise Exception("无法获取数据库连接：连接池已满")
-    
-    def return_connection(self, conn):
-        """将连接归还到连接池"""
-        if conn and self._is_connection_valid(conn):
-            try:
-                self._pool.put(conn, timeout=1)
-            except:
-                # 连接池已满，关闭连接
-                conn.close()
-                with self._lock:
-                    self._created_connections -= 1
-        else:
-            # 连接无效，关闭它
-            if conn:
-                conn.close()
-                with self._lock:
-                    self._created_connections -= 1
-    
-    def _is_connection_valid(self, conn):
-        """检查连接是否有效"""
-        try:
-            conn.execute("SELECT 1")
-            return True
-        except:
-            return False
-    
-    def close_all(self):
-        """关闭所有连接"""
-        while True:
-            try:
-                conn = self._pool.get(timeout=1)
-                conn.close()
-            except Empty:
-                break
-        with self._lock:
-            self._created_connections = 0
-        logger.info("所有数据库连接已关闭")
-
-# 创建全局连接池
-db_pool = SQLiteConnectionPool(DB_PATH, pool_size=10)
-
 @contextmanager
 def get_db_connection() -> Iterator[sqlite3.Connection]:
-    """获取数据库连接的上下文管理器"""
+    """
+    为每个请求创建一个新的只读数据库连接，并在请求结束后自动关闭它。
+    解决连接池占用，导致wal文件持续增长的问题。
+    """
     conn = None
     try:
-        conn = db_pool.get_connection()
-        if conn is None:
-            raise Exception("无法获取数据库连接")
+        # 1. 为每个请求创建一个全新的只读连接
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        
+        # 2. 将创建好的连接提供给 with 语句块使用
         yield conn
+        
+    except sqlite3.OperationalError as e:
+        logger.error(f"数据库连接或操作失败: {e}")
+        # 向上抛出异常，以便Flask能捕获并返回错误信息
+        raise
     finally:
+        # 3. 无论 with 语句块中发生什么（成功或异常），最终都会关闭连接
         if conn:
-            db_pool.return_connection(conn)
+            conn.close()
+            # logger.debug("数据库连接已关闭。") # 如果需要，可以取消此行注释来观察连接关闭
 
-# 保持向后兼容的全局连接（已弃用，建议使用连接池）
-def get_legacy_db_connection():
-    """获取数据库连接（只读模式）- 已弃用，请使用 get_db_connection() 上下文管理器"""
-    logger.warning("使用了已弃用的 get_legacy_db_connection()，建议使用连接池")
-    return db_pool.get_connection()
 app = Flask(__name__)
 
 def get_item_hierarchy(conn, item_guid, cache=None):
@@ -521,5 +426,4 @@ if __name__ == '__main__':
         print("请检查数据库文件是否存在并可访问")
     finally:
         # 关闭所有数据库连接
-        db_pool.close_all()
-        logger.info("应用程序关闭，连接池已清理")
+        logger.info("应用程序关闭")
