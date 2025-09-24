@@ -3,7 +3,6 @@ import sqlite3
 import os
 import logging
 from datetime import datetime
-import threading
 
 # 配置日志
 logging.basicConfig(
@@ -16,102 +15,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-
-# 数据库路径 - 根据环境自动选择
-def get_db_path():
-    """获取数据库路径，支持Docker和本地环境"""
-    # Docker环境中的路径
-    docker_path = '/app/database/trimmedia.db'
-    # 本地开发环境路径
-    local_path = 'database/trimmedia.db'
-    
-    # 如果是Docker环境（通过环境变量或路径判断）
-    if os.path.exists('/app') and os.path.exists('/app/database'):
-        logger.info("检测到Docker环境，使用Docker路径")
-        return docker_path
-    else:
-        logger.info("检测到本地环境，使用相对路径")
-        return local_path
-
-DB_PATH = get_db_path()
-
-class DatabaseConnection:
-    """数据库连接单例类"""
-    _instance = None
-    _lock = threading.Lock()
-    _connection = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super(DatabaseConnection, cls).__new__(cls)
-                    cls._instance._initialize_connection()
-        return cls._instance
-    
-    def _initialize_connection(self):
-        """初始化数据库连接"""
-        try:
-            if not os.path.exists(DB_PATH):
-                logger.error(f"数据库文件不存在: {DB_PATH}")
-                raise FileNotFoundError(f"数据库文件不存在: {DB_PATH}")
-            
-            # 使用只读模式和WAL模式打开数据库连接
-            self._connection = sqlite3.connect(
-                f"file:{DB_PATH}?mode=ro&cache=shared", 
-                uri=True,
-                check_same_thread=False,  # 允许多线程使用同一连接
-                timeout=30.0  # 设置超时时间
-            )
-            self._connection.row_factory = sqlite3.Row  # 使结果以字典形式返回
-            # 设置UTF-8编码和大小写不敏感的LIKE操作
-            self._connection.execute("PRAGMA case_sensitive_like = OFF")
-            # 设置读取优化参数
-            self._connection.execute("PRAGMA query_only = ON")  # 只读模式
-            self._connection.execute("PRAGMA temp_store = MEMORY")  # 临时表存储在内存中
-            logger.info("数据库连接初始化成功（只读单例模式）")
-        except Exception as e:
-            logger.error(f"数据库连接初始化失败: {e}")
-            self._connection = None
-            raise
-    
-    def get_connection(self):
-        """获取数据库连接"""
-        if self._connection is None:
-            self._initialize_connection()
-        return self._connection
-    
-    def execute(self, query, params=None):
-        """执行查询并返回结果"""
-        try:
-            conn = self.get_connection()
-            if conn is None:
-                raise sqlite3.Error("数据库连接为空")
-            if params:
-                return conn.execute(query, params)
-            else:
-                return conn.execute(query)
-        except sqlite3.Error as e:
-            logger.error(f"数据库查询失败: {e}")
-            # 如果连接出现问题，尝试重新初始化
-            try:
-                self._initialize_connection()
-                conn = self.get_connection()
-                if params:
-                    return conn.execute(query, params)
-                else:
-                    return conn.execute(query)
-            except Exception as retry_e:
-                logger.error(f"数据库重连失败: {retry_e}")
-                raise
-
-# 创建全局数据库实例
-db = DatabaseConnection()
-
+DB_PATH = "database/trimmedia.db"
 def get_db_connection():
-    """获取数据库连接（保持向后兼容）"""
-    return db.get_connection()
+    """获取数据库连接（只读模式）"""
+    try:
+        if not os.path.exists(DB_PATH):
+            logger.error(f"数据库文件不存在: {DB_PATH}")
+            raise FileNotFoundError(f"数据库文件不存在: {DB_PATH}")
+        
+        # 使用只读模式打开数据库连接
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
+        conn.row_factory = sqlite3.Row  # 使结果以字典形式返回
+        # 设置UTF-8编码和大小写不敏感的LIKE操作
+        conn.execute("PRAGMA case_sensitive_like = OFF")
+        logger.debug("数据库连接成功（只读模式）")
+        return conn
+    except Exception as e:
+        logger.error(f"数据库连接失败: {e}")
+        raise
+
+db = get_db_connection()
+app = Flask(__name__)
 
 def get_item_hierarchy(conn, item_guid, cache=None):
     """获取项目的完整层级信息（带缓存）"""
