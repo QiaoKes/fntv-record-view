@@ -10,10 +10,7 @@ from contextlib import contextmanager
 from queue import Queue, Empty, Full
 from typing import Iterator
 import random
-
-# ===============================================================
-# 配置部分 (Configuration)
-# ===============================================================
+import shutil
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,7 +24,43 @@ logger = logging.getLogger(__name__)
 
 # 1. 获取当前文件 (main.py) 所在的目录的绝对路径
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'database', 'trimmedia.db')
+SRC_DB_PATH = os.path.join(BASE_DIR, 'database', 'trimmedia.db')
+TMP_DB_PATH = os.path.join(BASE_DIR, 'trimmedia_tmp.db')
+COPY_DB_INTERVAL = 60  # 每60秒拷贝一次数据库
+
+def copy_database():
+    """
+    将源数据库拷贝到临时数据库
+    """
+    try:
+        if os.path.exists(SRC_DB_PATH):
+            # 先检查源数据库文件是否可读
+            if os.access(SRC_DB_PATH, os.R_OK):
+                shutil.copy2(SRC_DB_PATH, TMP_DB_PATH)
+                logger.info(f"数据库拷贝成功: {SRC_DB_PATH} -> {TMP_DB_PATH}")
+            else:
+                logger.warning(f"源数据库文件无法读取: {SRC_DB_PATH}")
+        else:
+            logger.warning(f"源数据库文件不存在: {SRC_DB_PATH}")
+    except Exception as e:
+        logger.error(f"数据库拷贝失败: {e}")
+
+def database_sync_worker():
+    """
+    数据库同步后台工作线程，每分钟执行一次拷贝
+    """
+    logger.info("数据库同步线程已启动，每分钟同步一次数据库")
+    
+    # 首次启动时立即执行一次拷贝
+    copy_database()
+    
+    while True:
+        try:
+            time.sleep(COPY_DB_INTERVAL)  # 等待60秒（1分钟）
+            copy_database()
+        except Exception as e:
+            logger.error(f"数据库同步线程异常: {e}")
+            time.sleep(COPY_DB_INTERVAL)  # 即使出错也要继续等待
 
 @contextmanager
 def get_db_connection() -> Iterator[sqlite3.Connection]:
@@ -42,24 +75,16 @@ def get_db_connection() -> Iterator[sqlite3.Connection]:
     for attempt in range(max_retries):
         try:
             # 仍然是按需创建连接
-            conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
+            conn = sqlite3.connect(f"file:{TMP_DB_PATH}?mode=ro", uri=True, check_same_thread=False)
             conn.row_factory = sqlite3.Row
             # 连接成功，跳出循环
             break
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e):
-                if attempt < max_retries - 1:
-                    # 使用带随机抖动的指数退避策略，避免同时重试
-                    delay = base_delay * (2 ** attempt) + random.uniform(0, 0.05)
-                    logger.warning(f"数据库被锁定，将在 {delay:.2f} 秒后重试... (尝试 {attempt + 2}/{max_retries})")
-                    time.sleep(delay)
-                else:
-                    logger.error("多次重试后数据库仍然被锁定。")
-                    raise  # 重试次数用尽，向上抛出异常
+        except sqlite3.OperationalError:
+            if attempt < max_retries - 1:
+                time.sleep(base_delay)
             else:
-                # 其他类型的错误，直接抛出
-                logger.error(f"数据库连接或操作失败: {e}")
-                raise
+                logger.error("多次重试后数据库仍然被锁定。")
+                raise  # 重试次数用尽，向上抛出异常
     
     # 如果 conn 仍然是 None (虽然理论上上面的逻辑会抛异常，但作为保险)
     if not conn:
@@ -439,6 +464,11 @@ if __name__ == '__main__':
     logger.info("=" * 50)
     logger.info("访问地址: http://127.0.0.1:5000")
     logger.info("Flask 运行模式: 串行处理 (单线程)")
+    
+    # 启动数据库同步线程
+    sync_thread = threading.Thread(target=database_sync_worker, daemon=True)
+    sync_thread.start()
+    
     logger.info("所有组件已启动，服务运行中...")
     logger.info("=" * 50)
     
