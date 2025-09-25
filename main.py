@@ -1,17 +1,20 @@
 from flask import Flask, render_template, request, jsonify
 import sqlite3
 import os
+import sys # ### NEW ###
 import logging
 from datetime import datetime
 import threading
+import time
 from contextlib import contextmanager
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 from typing import Iterator
+import random
+import shutil
 
-# 配置日志
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('app.log', encoding='utf-8'),
         logging.StreamHandler()
@@ -19,128 +22,111 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DB_PATH = "database/trimmedia.db"
+# 1. 获取当前文件 (main.py) 所在的目录的绝对路径
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+SRC_DB_PATH = os.path.join(BASE_DIR, 'database', 'trimmedia.db')
+TMP_DB_PATH = os.path.join(BASE_DIR, 'trimmedia_tmp.db')
 
-class SQLiteConnectionPool:
-    """简单的SQLite连接池实现"""
-    
-    def __init__(self, db_path, pool_size=10):
-        self.db_path = db_path
-        self.pool_size = pool_size
-        self._pool = Queue(maxsize=pool_size)
-        self._lock = threading.Lock()
-        self._created_connections = 0
-        self._initialize_pool()
-    
-    def _initialize_pool(self):
-        """初始化连接池"""
-        for _ in range(min(5, self.pool_size)):  # 预先创建5个连接
-            conn = self._create_connection()
-            if conn:
-                self._pool.put(conn)
-    
-    def _create_connection(self):
-        """创建新的数据库连接"""
-        try:
-            if not os.path.exists(self.db_path):
-                logger.error(f"数据库文件不存在: {self.db_path}")
-                raise FileNotFoundError(f"数据库文件不存在: {self.db_path}")
-            
-            # 使用只读模式打开数据库连接
-            conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
-            conn.row_factory = sqlite3.Row  # 使结果以字典形式返回
-            # 设置UTF-8编码和大小写不敏感的LIKE操作
-            conn.execute("PRAGMA case_sensitive_like = OFF")
-            
-            with self._lock:
-                self._created_connections += 1
-            
-            logger.debug(f"创建新的数据库连接，总连接数: {self._created_connections}")
-            return conn
-        except Exception as e:
-            logger.error(f"创建数据库连接失败: {e}")
-            return None
-    
-    def get_connection(self, timeout=5):
-        """从连接池获取连接"""
-        try:
-            # 尝试从连接池获取连接
-            conn = self._pool.get(timeout=timeout)
-            # 检查连接是否有效
-            if self._is_connection_valid(conn):
-                return conn
-            else:
-                # 连接无效，创建新连接
-                logger.warning("检测到无效连接，创建新连接")
-                conn.close()
-                return self._create_connection()
-        except Empty:
-            # 连接池为空且超时，创建新连接
-            if self._created_connections < self.pool_size:
-                logger.info("连接池为空，创建新连接")
-                return self._create_connection()
-            else:
-                logger.error("连接池已满且获取连接超时")
-                raise Exception("无法获取数据库连接：连接池已满")
-    
-    def return_connection(self, conn):
-        """将连接归还到连接池"""
-        if conn and self._is_connection_valid(conn):
-            try:
-                self._pool.put(conn, timeout=1)
-            except:
-                # 连接池已满，关闭连接
-                conn.close()
-                with self._lock:
-                    self._created_connections -= 1
-        else:
-            # 连接无效，关闭它
-            if conn:
-                conn.close()
-                with self._lock:
-                    self._created_connections -= 1
-    
-    def _is_connection_valid(self, conn):
-        """检查连接是否有效"""
-        try:
-            conn.execute("SELECT 1")
-            return True
-        except:
-            return False
-    
-    def close_all(self):
-        """关闭所有连接"""
-        while True:
-            try:
-                conn = self._pool.get(timeout=1)
-                conn.close()
-            except Empty:
-                break
-        with self._lock:
-            self._created_connections = 0
-        logger.info("所有数据库连接已关闭")
+# ### NEW: Configuration for lazy, atomic copy ###
+DB_EXPIRATION_SECONDS = 60  # 数据库副本的过期时间（60秒）
+_last_copy_time = 0.0       # 上次拷贝成功的时间戳，初始化为0以强制首次拷贝
+_db_copy_lock = threading.Lock() # 确保只有一个线程执行拷贝操作
 
-# 创建全局连接池
-db_pool = SQLiteConnectionPool(DB_PATH, pool_size=10)
+def _atomic_copy_database():
+    """
+    ### NEW ###
+    Performs an atomic copy of the database from the source to the temporary path.
+    This is done by copying to a new file first, then renaming it.
+    """
+    global _last_copy_time
+    logger.info("开始执行数据库原子化拷贝...")
+    
+    # 临时文件名，用于原子化操作
+    atomic_tmp_path = TMP_DB_PATH + ".new"
+
+    try:
+        if not os.path.exists(SRC_DB_PATH):
+            logger.warning(f"源数据库文件不存在: {SRC_DB_PATH}")
+            return
+        
+        if not os.access(SRC_DB_PATH, os.R_OK):
+            logger.warning(f"源数据库文件无法读取: {SRC_DB_PATH}")
+            return
+            
+        # 1. 拷贝到带 .new 后缀的临时文件
+        shutil.copy2(SRC_DB_PATH, atomic_tmp_path)
+        
+        # 2. 如果拷贝成功，原子化地重命名文件
+        os.rename(atomic_tmp_path, TMP_DB_PATH)
+        
+        # 3. 仅在完全成功后更新时间戳
+        _last_copy_time = time.time()
+        logger.info(f"数据库原子化拷贝成功: {SRC_DB_PATH} -> {TMP_DB_PATH}")
+
+    except Exception as e:
+        logger.error(f"数据库原子化拷贝失败: {e}")
+        # 如果新文件已创建但重命名失败，清理掉
+        if os.path.exists(atomic_tmp_path):
+            try:
+                os.remove(atomic_tmp_path)
+            except OSError as rm_err:
+                logger.error(f"清理临时文件 {atomic_tmp_path} 失败: {rm_err}")
 
 @contextmanager
 def get_db_connection() -> Iterator[sqlite3.Connection]:
-    """获取数据库连接的上下文管理器"""
+    """
+    ### CHANGED: Implemented lazy loading with expiration and thread safety ###
+    
+    为每个请求创建一个新的只读数据库连接。
+    在连接前，会检查临时数据库是否已过期或不存在。如果需要，会触发一次
+    线程安全的、原子化的数据库拷贝。
+    """
+    
+    # 检查数据库副本是否过期或不存在
+    is_expired = (time.time() - _last_copy_time) > DB_EXPIRATION_SECONDS
+    if not os.path.exists(TMP_DB_PATH) or is_expired:
+        # 使用锁来防止多个请求同时触发拷贝 (Race Condition)
+        with _db_copy_lock:
+            # 双重检查：在获取锁后，再次检查是否需要拷贝
+            # 因为可能在等待锁的时候，已经有另一个线程完成了拷贝
+            is_still_expired = (time.time() - _last_copy_time) > DB_EXPIRATION_SECONDS
+            if not os.path.exists(TMP_DB_PATH) or is_still_expired:
+                if is_still_expired:
+                    logger.info("数据库副本已过期，触发更新。")
+                else:
+                    logger.info("数据库副本不存在，触发更新。")
+                _atomic_copy_database()
+
+    # --- 以下为原始的连接逻辑 ---
     conn = None
+    max_retries = 10
+    base_delay = 0.05  # 50毫秒
+
+    for attempt in range(max_retries):
+        try:
+            conn = sqlite3.connect(f"file:{TMP_DB_PATH}?mode=ro", uri=True, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            break
+        except sqlite3.OperationalError:
+            if attempt < max_retries - 1:
+                time.sleep(base_delay)
+            else:
+                logger.error("多次重试后数据库仍然被锁定。")
+                raise
+    
+    if not conn:
+        raise sqlite3.OperationalError("无法建立数据库连接。")
+
     try:
-        conn = db_pool.get_connection()
-        if conn is None:
-            raise Exception("无法获取数据库连接")
         yield conn
     finally:
         if conn:
-            db_pool.return_connection(conn)
+            conn.close()
 
-# 保持向后兼容的全局连接（已弃用，建议使用连接池）
-def get_legacy_db_connection():
-    """获取数据库连接（只读模式）- 已弃用，请使用 get_db_connection() 上下文管理器"""
-    logger.warning("使用了已弃用的 get_legacy_db_connection()，建议使用连接池")
-    return db_pool.get_connection()
+# ===============================================================
+# Flask 应用 (Flask Application)
+# ===============================================================
+
 app = Flask(__name__)
 
 def get_item_hierarchy(conn, item_guid, cache=None):
@@ -503,23 +489,10 @@ if __name__ == '__main__':
     logger.info("=" * 50)
     logger.info("启动飞牛影视观看历史管理系统")
     logger.info("=" * 50)
-    logger.info(f"数据库路径: {DB_PATH}")
     logger.info("访问地址: http://127.0.0.1:5000")
-    logger.info("按 Ctrl+C 停止服务器")
+    logger.info("Flask 运行模式: 串行处理 (单线程)")
+    
+    logger.info("所有组件已启动，服务运行中...")
     logger.info("=" * 50)
     
-    try:
-        # 检查数据库连接
-        with get_db_connection() as conn:
-            conn.execute("SELECT 1")  # 简单测试查询
-            logger.info("数据库连接测试成功")
-        
-        app.run(debug=True, host='0.0.0.0', port=5000)
-    except Exception as e:
-        logger.error(f"启动失败: {e}")
-        print(f"\n❌ 启动失败: {e}")
-        print("请检查数据库文件是否存在并可访问")
-    finally:
-        # 关闭所有数据库连接
-        db_pool.close_all()
-        logger.info("应用程序关闭，连接池已清理")
+    app.run(host='0.0.0.0', port=5000)
