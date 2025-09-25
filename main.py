@@ -26,67 +26,94 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 SRC_DB_PATH = os.path.join(BASE_DIR, 'database', 'trimmedia.db')
 TMP_DB_PATH = os.path.join(BASE_DIR, 'trimmedia_tmp.db')
-COPY_DB_INTERVAL = 60  # 每60秒拷贝一次数据库
 
-def copy_database():
+# ### NEW: Configuration for lazy, atomic copy ###
+DB_EXPIRATION_SECONDS = 60  # 数据库副本的过期时间（60秒）
+_last_copy_time = 0.0       # 上次拷贝成功的时间戳，初始化为0以强制首次拷贝
+_db_copy_lock = threading.Lock() # 确保只有一个线程执行拷贝操作
+
+def _atomic_copy_database():
     """
-    将源数据库拷贝到临时数据库
+    ### NEW ###
+    Performs an atomic copy of the database from the source to the temporary path.
+    This is done by copying to a new file first, then renaming it.
     """
+    global _last_copy_time
+    logger.info("开始执行数据库原子化拷贝...")
+    
+    # 临时文件名，用于原子化操作
+    atomic_tmp_path = TMP_DB_PATH + ".new"
+
     try:
-        if os.path.exists(SRC_DB_PATH):
-            # 先检查源数据库文件是否可读
-            if os.access(SRC_DB_PATH, os.R_OK):
-                shutil.copy2(SRC_DB_PATH, TMP_DB_PATH)
-                logger.info(f"数据库拷贝成功: {SRC_DB_PATH} -> {TMP_DB_PATH}")
-            else:
-                logger.warning(f"源数据库文件无法读取: {SRC_DB_PATH}")
-        else:
+        if not os.path.exists(SRC_DB_PATH):
             logger.warning(f"源数据库文件不存在: {SRC_DB_PATH}")
-    except Exception as e:
-        logger.error(f"数据库拷贝失败: {e}")
+            return
+        
+        if not os.access(SRC_DB_PATH, os.R_OK):
+            logger.warning(f"源数据库文件无法读取: {SRC_DB_PATH}")
+            return
+            
+        # 1. 拷贝到带 .new 后缀的临时文件
+        shutil.copy2(SRC_DB_PATH, atomic_tmp_path)
+        
+        # 2. 如果拷贝成功，原子化地重命名文件
+        os.rename(atomic_tmp_path, TMP_DB_PATH)
+        
+        # 3. 仅在完全成功后更新时间戳
+        _last_copy_time = time.time()
+        logger.info(f"数据库原子化拷贝成功: {SRC_DB_PATH} -> {TMP_DB_PATH}")
 
-def database_sync_worker():
-    """
-    数据库同步后台工作线程，每分钟执行一次拷贝
-    """
-    logger.info("数据库同步线程已启动，每分钟同步一次数据库")
-    
-    # 首次启动时立即执行一次拷贝
-    copy_database()
-    
-    while True:
-        try:
-            time.sleep(COPY_DB_INTERVAL)  # 等待60秒（1分钟）
-            copy_database()
-        except Exception as e:
-            logger.error(f"数据库同步线程异常: {e}")
-            time.sleep(COPY_DB_INTERVAL)  # 即使出错也要继续等待
+    except Exception as e:
+        logger.error(f"数据库原子化拷贝失败: {e}")
+        # 如果新文件已创建但重命名失败，清理掉
+        if os.path.exists(atomic_tmp_path):
+            try:
+                os.remove(atomic_tmp_path)
+            except OSError as rm_err:
+                logger.error(f"清理临时文件 {atomic_tmp_path} 失败: {rm_err}")
 
 @contextmanager
 def get_db_connection() -> Iterator[sqlite3.Connection]:
     """
-    为每个请求创建一个新的只读数据库连接，并在请求结束后自动关闭它。
-    增加了连接重试逻辑来处理临时的数据库锁定。
+    ### CHANGED: Implemented lazy loading with expiration and thread safety ###
+    
+    为每个请求创建一个新的只读数据库连接。
+    在连接前，会检查临时数据库是否已过期或不存在。如果需要，会触发一次
+    线程安全的、原子化的数据库拷贝。
     """
+    
+    # 检查数据库副本是否过期或不存在
+    is_expired = (time.time() - _last_copy_time) > DB_EXPIRATION_SECONDS
+    if not os.path.exists(TMP_DB_PATH) or is_expired:
+        # 使用锁来防止多个请求同时触发拷贝 (Race Condition)
+        with _db_copy_lock:
+            # 双重检查：在获取锁后，再次检查是否需要拷贝
+            # 因为可能在等待锁的时候，已经有另一个线程完成了拷贝
+            is_still_expired = (time.time() - _last_copy_time) > DB_EXPIRATION_SECONDS
+            if not os.path.exists(TMP_DB_PATH) or is_still_expired:
+                if is_still_expired:
+                    logger.info("数据库副本已过期，触发更新。")
+                else:
+                    logger.info("数据库副本不存在，触发更新。")
+                _atomic_copy_database()
+
+    # --- 以下为原始的连接逻辑 ---
     conn = None
     max_retries = 10
     base_delay = 0.05  # 50毫秒
 
     for attempt in range(max_retries):
         try:
-            # 仍然是按需创建连接
             conn = sqlite3.connect(f"file:{TMP_DB_PATH}?mode=ro", uri=True, check_same_thread=False)
             conn.row_factory = sqlite3.Row
-            # 连接成功，跳出循环
             break
         except sqlite3.OperationalError:
             if attempt < max_retries - 1:
                 time.sleep(base_delay)
             else:
                 logger.error("多次重试后数据库仍然被锁定。")
-                raise  # 重试次数用尽，向上抛出异常
+                raise
     
-    # 如果 conn 仍然是 None (虽然理论上上面的逻辑会抛异常，但作为保险)
     if not conn:
         raise sqlite3.OperationalError("无法建立数据库连接。")
 
@@ -465,11 +492,7 @@ if __name__ == '__main__':
     logger.info("访问地址: http://127.0.0.1:5000")
     logger.info("Flask 运行模式: 串行处理 (单线程)")
     
-    # 启动数据库同步线程
-    sync_thread = threading.Thread(target=database_sync_worker, daemon=True)
-    sync_thread.start()
-    
     logger.info("所有组件已启动，服务运行中...")
     logger.info("=" * 50)
     
-    app.run(host='0.0.0.0', port=5000, threaded=False)
+    app.run(host='0.0.0.0', port=5000)
